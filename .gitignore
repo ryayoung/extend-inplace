@@ -1,0 +1,16 @@
+dist
+test
+*__pycache__
+*.ipynb_checkpoints
+*.egg-info
+*.pytest_cache
+
+.DS_Store
+*test.py
+
+*.ipynb
+*.docx
+*.csv
+*.xlsx
+*.ai
+*.pkl
