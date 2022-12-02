@@ -4,6 +4,8 @@
 pip install extend-inplace
 ```
 
+[Source Code](src/extend_inplace/main.py) (src/extend_inplace/main.py)
+
 ---
 
 A simple tool to enable an unconventional but sometimes useful coding style. In simple terms, it's a framework for modifying existing classes in an easy, organized, and readable way. I'll explain why this exists shortly. First, see the below examples.
