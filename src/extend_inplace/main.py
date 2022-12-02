@@ -8,10 +8,8 @@ from typing import (
 )
 
 """
-KEY TERMS
+KEY TERMS (in context of this module)
 -------------------------------------
-(Throughout this module, documentation will use some unconventional terms
-for the sake of easier communication)
 extend:
     Normally, to "extend" a class is to create a child class with additional
     functionality. However, the purpose of this module is to make that happen
@@ -29,9 +27,7 @@ _history = set()
 
 class ExistingAttributeError(Exception):
     """
-    Used to prevent accidental replacement of existing attributes.
-    Raised when the user has chosen to prevent replacement (``overwrite = False``),
-    and the attribute hasn't yet been recorded (which means it's not user-defined)
+    Friendly error to prevent accidental replacement of existing attributes.
     """
     pass
 
@@ -48,6 +44,30 @@ class _ExtendMeta(type):
     Note about metaclasses: instances of this class are other classes, not objects.
     So, ``__new__`` is called upon creation of any class who declared this
     class as its metaclass.
+
+    Notes about __new__()
+    ---------------------
+    Behaves normally when called from a class who directly declares
+    this as its metaclass. However, when called from an instance's child,
+    the calling class's arguments and attributes will be passed to a
+    function that processes the extension, and the newly declared child
+    class will be destroyed. And, the ``bases`` argument will be processed
+    such that only its first element will be treated as normal, and the
+    remaining classes specified will be treated as extension targets.
+
+    For instance, if this code is passed ...
+    >>> import pandas as pd
+    >>> class _(Extend, pd.DataFrame, pd.Series):
+    ...     ...
+
+    Instead of trying to inherit from ``pd.DataFrame`` and ``pd.Series``,
+    it will be interpreted as ...
+    >>> class _(Extend, to = [pd.DataFrame, pd.Series]):
+    ...     ...
+
+    When evaluating the first example, we decide that since the first argument
+    is an instance of ``_ExtendMeta``, all other types provided should be
+    interpreted as targets
     """
     def __new__(
         cls,
@@ -55,43 +75,14 @@ class _ExtendMeta(type):
         bases,
         cls_dict,
         *,
-        # custom args
         to: Iterable[type] | type | None = None,
         keep: bool = False,
         **kwargs,
-    ) -> type:  # type: ignore
+    ) -> type:
         """
-        Behaves normally when called from a class who directly declares
-        this as its metaclass. However, when called from an instance's child,
-        the calling class's arguments and attributes will be passed to a
-        function that processes the extension, and the newly declared child
-        class will be destroyed. And, the ``bases`` argument will be processed
-        such that only its first element will be treated as normal, and the
-        remaining classes specified will be treated as extension targets.
-
-        For instance, if this code is passed ...
-        >>> import pandas as pd
-        >>> class _(Extend, pd.DataFrame, pd.Series):
-        ...     ...
-
-        Instead of trying to inherit from ``pd.DataFrame`` and ``pd.Series``,
-        it will be interpreted as ...
-        >>> class _(Extend, to = [pd.DataFrame, pd.Series]):
-        ...     ...
-
-        When evaluating the first example, we decide that since the first argument
-        is an instance of ``_ExtendMeta``, all other types provided should be
-        interpreted as targets
-
-        Notes
-        -----
-        This method is *first* called when creating a class that directly
-        declares this class as its metaclass. During this first call, our global
-        scope is limited to variables created before this class. We can identify
-        the first call by checking that ``bases`` is empty. Once it's populated,
-        we can safely access objects declared later.
+        Triggers extension and returns None when first element in `bases` is
+        a child of an instance of `_ExtendMeta`. Otherwise acts normal.
         """
-
         if len(bases) > 0:
             if not isinstance(bases[0], _ExtendMeta):
                 raise ValueError("First parent argument must be an instance of '_ExtendMeta'")
@@ -103,7 +94,9 @@ class _ExtendMeta(type):
 
             if not isinstance(to, Iterable):
                 to = (to,)
+
             _push_cls_attrs(cls_dict=cls_dict, to=to, **kwargs)  # type: ignore
+
             if keep is False:
                 return cast(_ExtendMeta, None)
 
@@ -161,6 +154,28 @@ class Extend(metaclass=_ExtendMeta):
     >>> class _(Extend, to = [pd.DataFrame, pd.Series]):
     ...     ...
 
+    Notes about __new__()
+    ---------------------
+    Called when decorating an element with `Extend` instead of subclassing it.
+    Pass arguments to `Extend()`.
+
+    1.  If decorating a function, the function will be pushed to the targets
+    2.  If decorating a property directly, the ``@property`` syntax must be
+        used (not ``property()``), and the ``@property`` decorator must be
+        placed below ``@Extend()``
+    3.  If decorating a class, all custom attributes of the class will be pushed,
+        and, by default, deleted from the decorated class. This can be disabled
+        with ``keep=False``
+
+    `overwrite=True` allows replacement of attributes that already exist in target class
+    and weren't already defined by the user.
+
+    `keep=True` lets the decorated element remain in global scope
+
+    `as_property=True` - All attributes will be converted to ``property`` type before
+    being pushed. (Note: a ``@property`` decorator will still be required for any elements
+    that are followed by corresponding ``@<func>.setter`` or ``@<func>.deleter`` methods.
+
     """
 
     def __new__(  # type: ignore
@@ -171,38 +186,7 @@ class Extend(metaclass=_ExtendMeta):
         keep: bool = False,
     ) -> Optional[Callable[..., Any]]:
         """
-        Called when decorating an element with ``Extend``, instead of subclassing it.
-        Returns a wrapper function for decorating. If decorating a function,
-        the function will be pushed to the targets
-
-        If decorating a property directly, the ``@property`` syntax must be
-        used (not ``property()``), and the ``@property`` decorator must be
-        placed below ``@Extend()``
-
-        If decorating a class, all custom attributes of the class, (including
-        class variables, property setter/deleters, etc.) will be pushed,
-        and, by default, deleted from the decorated class. This can be disabled
-        with ``del_old_attrs = False``
-
-        Parameters
-        ----------
-        args : tuple[type, ...] or tuple[list[type] | tuple[type, ...]]
-            Target class(es) to extend
-        overwrite : bool, default False
-            Allow replacement of attribute that already exists in target class
-            and wasn't already defined by the user. Default is False to serve as a
-            safeguard against *accidental* changes
-        as_property : bool, default False
-            When True, all attributes will be converted to ``property`` type before
-            being pushed. Therefore, all attributes *must* be of type ``function``
-            or ``property``. This is useful when pushing a large quantity of
-            functions, as a means of saving space by eliminating the need for repetitive
-            ``@property`` decorators placed above each function. (Note: a ``@property``
-            decorator will still be required for any elements that are followed by
-            corresponding ``@<func>.setter`` or ``@<func>.deleter`` methods, as
-            the python interpreter will try to evaluate them before the original
-            getter function is converted to a property)
-
+        Called when decorating an element with ``Extend``. Returns a wrapper function.
         """
 
         if len(args) == 0:
