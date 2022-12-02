@@ -1,6 +1,11 @@
 import inspect
-import types
-from typing import TypeVar, Type, Callable, Iterable
+from typing import (
+    Callable,
+    Optional,
+    Iterable,
+    Any,
+    cast
+)
 
 """
 KEY TERMS
@@ -16,9 +21,8 @@ target:
     Class which we're trying to extend by setting attributes directly
 push:
     The act of setting a class attribute. Synonymous with ``setattr()``
-"""
 
-T = TypeVar('T', bound='Extend') # generic
+"""
 
 _history = set()
 
@@ -30,7 +34,6 @@ class ExistingAttributeError(Exception):
     and the attribute hasn't yet been recorded (which means it's not user-defined)
     """
     pass
-
 
 
 class _ExtendMeta(type):
@@ -46,14 +49,17 @@ class _ExtendMeta(type):
     So, ``__new__`` is called upon creation of any class who declared this
     class as its metaclass.
     """
-    # @overload
-    # def __new__(...):
-        # ...
-    def __new__(cls, cls_name, bases, cls_dict, *, # default args
-        to: list|tuple|type|None = None,
+    def __new__(
+        cls,
+        cls_name,
+        bases,
+        cls_dict,
+        *,
+        # custom args
+        to: Iterable[type] | type | None = None,
         keep: bool = False,
         **kwargs,
-    ) -> type:
+    ) -> type:  # type: ignore
         """
         Behaves normally when called from a class who directly declares
         this as its metaclass. However, when called from an instance's child,
@@ -95,12 +101,13 @@ class _ExtendMeta(type):
                 else:
                     raise ValueError("missing param, 'to'")
 
-            _push_cls_attrs(cls_dict=cls_dict, to=to, **kwargs)
-            if keep == False:
-                return
+            if not isinstance(to, Iterable):
+                to = (to,)
+            _push_cls_attrs(cls_dict=cls_dict, to=to, **kwargs)  # type: ignore
+            if keep is False:
+                return cast(_ExtendMeta, None)
 
         return super().__new__(cls, cls_name, bases, cls_dict)
-
 
 
 class Extend(metaclass=_ExtendMeta):
@@ -156,13 +163,13 @@ class Extend(metaclass=_ExtendMeta):
 
     """
 
-    def __new__(
+    def __new__(  # type: ignore
         cls,
-        *args: tuple[type, ...] | tuple[Iterable[type]],
+        *args: type | Iterable[type],
         overwrite: bool = False,
         as_property: bool = False,
         keep: bool = False,
-    ) -> Callable | None:
+    ) -> Optional[Callable[..., Any]]:
         """
         Called when decorating an element with ``Extend``, instead of subclassing it.
         Returns a wrapper function for decorating. If decorating a function,
@@ -199,71 +206,48 @@ class Extend(metaclass=_ExtendMeta):
         """
 
         if len(args) == 0:
-            raise ValueError(f"Must pass target class(es) as arguments")
-        if not inspect.isclass(args[0]):
-            raise ValueError(f"First positional argument passed to Extend must be a target class")
+            raise ValueError("Must pass target class(es) as arguments")
 
-        def inner(e):
+        def inner(e: Callable[[Any], Any]):
             if inspect.isclass(e):
                 _push_cls_attrs(
-                    cls_dict=e.__dict__,
+                    cls_dict=dict(e.__dict__),
                     to=args,
                     overwrite=overwrite,
                     as_property=as_property
                 )
 
-            elif inspect.isfunction(e) or isinstance(e, property):
-                attr_name = e.__name__ if not isinstance(e, property) else e.fget.__name__
-                for cls in _fmt_validate_target_args(args):
+            elif inspect.isfunction(e) or isinstance(e, (property, classmethod, staticmethod)):
+                if isinstance(e, property):
+                    attr_name = getattr(e.fget, '__name__')
+                else:
+                    attr_name = getattr(e, '__name__')
+
+                for target in _fmt_validate_target_args(args):
                     _push_attr(
-                        target_cls=cls,
+                        target_cls=target,
                         attr_name=attr_name,
                         attr_obj=e,
                         overwrite=overwrite,
                         as_property=as_property,
                     )
             else:
-                raise ValueError("Don't know how to handle this")
+                raise ValueError("Don't know how to handle this")  # Should come up missing in cov
 
-            if keep == True:
+            if keep is True:
                 return e
 
         return inner
 
-    def __init__(self, *args, **kwargs):
-        print("init called")
-
 
 def _push_cls_attrs(
-    cls_dict: dict,
-    to: list | tuple | type,
+    cls_dict: dict[str, Any],
+    to: tuple[type | Iterable[type], ...],
     overwrite: bool = False,
     as_property: bool = False,
 ) -> None:
     """
     Sets user-defined attributes in ``cls_dict`` as attributes of each target in ``to``
-
-    Parameters
-    ----------
-    cls_dict : type
-        Class containing attributes to be pushed.
-    to : list or tuple or type
-        Target class(es) to extend. Plural version of ``target_cls``. Flexible
-        data type to accomodate a variety of callers.
-    overwrite : bool, default False
-        Allow replacement of attribute that already exists in target class
-        and wasn't already defined by the user. Default is False to serve as a
-        safeguard against *accidental* changes
-    as_property : bool, default False
-        When True, all attributes will be converted to ``property`` type before
-        being pushed. Therefore, all attributes *must* be of type ``function``
-        or ``property``. This is useful when pushing a large quantity of
-        functions, as a means of saving space by eliminating the need for repetitive
-        ``@property`` decorators placed above each function. (Note: a ``@property``
-        decorator will still be required for any elements that are followed by
-        corresponding ``@<func>.setter`` or ``@<func>.deleter`` methods, as
-        the python interpreter will try to evaluate them before the original
-        getter function is converted to a property)
     """
 
     exclude_attrs = [
@@ -287,11 +271,10 @@ def _push_cls_attrs(
             )
 
 
-
 def _push_attr(
     target_cls: type,
     attr_name: str,
-    attr_obj: any,
+    attr_obj: Callable[[Any], Any] | property,
     overwrite: bool,
     as_property: bool,
 ) -> None:
@@ -307,7 +290,7 @@ def _push_attr(
     ExistingAttributeError:
         When an attribute that isn't in ``_history`` is already exists on target, and ``overwrite=False``
     """
-    if as_property == True and not isinstance(attr_obj, property):
+    if as_property is True and not isinstance(attr_obj, property):
         if not inspect.isfunction(attr_obj):
             raise TypeError(
                 f"Can't convert '{attr_name}' from type '{type(attr_obj)}', to property"
@@ -319,13 +302,11 @@ def _push_attr(
             )
         attr_obj = property(attr_obj)
 
-
-    if overwrite == False:
+    if overwrite is False:
         _validate_non_existing_attribute(target_cls=target_cls, attr_name=attr_name)
 
     _history.add(_make_history_key(target_cls, attr_name))
     setattr(target_cls, attr_name, attr_obj)
-
 
 
 def _validate_non_existing_attribute(
@@ -350,10 +331,9 @@ def _validate_non_existing_attribute(
         )
 
 
-
 def _make_history_key(
     target_cls: type, attr_name: str
-) -> tuple:
+) -> tuple[str | None, str | None, str]:
     """
     Since ``_history`` persists globally, a robust unique identifier
     for each history record is needed: (module name, class name, attr name)
@@ -373,7 +353,9 @@ def _make_history_key(
     )
 
 
-def _fmt_validate_target_args(args: tuple | list | type) -> tuple[type, ...]:
+def _fmt_validate_target_args(
+    args: tuple[type | Iterable[type], ...],
+) -> tuple[type, ...]:
     """
     Flatten and validate args of unknown format into a tuple of types
     """
@@ -382,11 +364,13 @@ def _fmt_validate_target_args(args: tuple | list | type) -> tuple[type, ...]:
 
     if not all(isinstance(x, type) for x in args):
         raise TypeError("Targets must be of type, 'type'")
+    else:
+        return args  # type: ignore
 
-    return args
 
-
-def _flatten_iterable(args: any) -> tuple[any, ...]:
+def _flatten_iterable(
+    args: Any
+) -> tuple[Any, ...]:
     """
     Turns anything into a flattened tuple of non-iterable (str, bytes excluded) values
 
@@ -400,9 +384,12 @@ def _flatten_iterable(args: any) -> tuple[any, ...]:
     ('hi', 1, 3, 8, 3, 3, 3)
     """
 
-    valid_iterable = lambda e: isinstance(e, Iterable) and not isinstance(e, (str,bytes))
+    def valid_iterable(e: Any) -> bool:
+        if isinstance(e, Iterable) and not isinstance(e, (str, bytes)):
+            return True
+        return False
 
-    def flatten(elems: Iterable):
+    def flatten(elems: Iterable[Any]):
         for e in elems:
             if valid_iterable(e):
                 yield from flatten(e)
@@ -414,42 +401,36 @@ def _flatten_iterable(args: any) -> tuple[any, ...]:
     return tuple(flatten(args))
 
 
-
-
-
 if __name__ == '__main__':
     import doctest
-    import pandas as pd
     doctest.testmod()
 
 
-
-
 # def convert_to_extend_subclass(
-    # from_cls: type, **kwargs
+#     from_cls: type, **kwargs
 # ) -> Type[T]:
-    # """
-    # Alternative to calling ``cls.push_class_contents()`` directly.
-    # Given a class and kwargs, this dynamically creates and returns a new
-    # class that inherits from Extend, invoking its ``__init_subclass__()``,
-# 
-    # Parameters
-    # ----------
-    # from_cls : type
-        # Class containing attributes to be pushed.
-    # kwargs
-        # Keyword arguments to be passed as class-level keyword arguments to
-        # the new class definition, to then be received by ``cls.__init_subclass__()``
-    # """
-# 
-    # updated_cls_dict = {
-            # k:v for k,v in from_cls.__dict__.items()
-        # if k not in ["__weakref__", "__dict__"]
-    # }
-# 
-    # return types.new_class(
-        # from_cls.__name__,
-        # bases=(Extend,),
-        # kwds = kwargs,
-        # exec_body = lambda body: (body.update(updated_cls_dict))
-    # )
+#     """
+#     Alternative to calling ``cls.push_class_contents()`` directly.
+#     Given a class and kwargs, this dynamically creates and returns a new
+#     class that inherits from Extend, invoking its ``__init_subclass__()``,
+
+#     Parameters
+#     ----------
+#     from_cls : type
+#         Class containing attributes to be pushed.
+#     kwargs
+#         Keyword arguments to be passed as class-level keyword arguments to
+#         the new class definition, to then be received by ``cls.__init_subclass__()``
+#     """
+
+#     updated_cls_dict = {
+#             k:v for k,v in from_cls.__dict__.items()
+#         if k not in ["__weakref__", "__dict__"]
+#     }
+
+#     return types.new_class(
+#         from_cls.__name__,
+#         bases=(Extend,),
+#         kwds = kwargs,
+#         exec_body = lambda body: (body.update(updated_cls_dict))
+#     )

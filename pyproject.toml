@@ -1,45 +1,25 @@
 [build-system]
 # requires: list of packages needed to build my package
-requires = ["hatchling"]
+requires = ["setuptools>=42.0", "wheel"]
 # build-backend: name of the python object that frontends use to perform build
-build-backend = "hatchling.build"
+build-backend = "setuptools.build_meta"
 
-[project]
-name = "extend-inplace"
-version = "0.0.0"
-requires-python = ">=3.10"
-
-description = ""
-
-readme = "README.md"
-license = { file = "LICENSE" }
-
-authors = [
-    { name = "Ryan Young", email = "dev@ryayoung.com" },
+[tool.pytest.ini_options]
+addopts = "--cov=extend_inplace -s --doctest-modules --cov-fail-under=85"
+testpaths = [
+    "tests",
 ]
 
-maintainers = [
-    { name = "Ryan Young", email = "dev@ryayoung.com" },
-]
-
-# dependencies = [
-# ]
-
-classifiers = [
-	"License :: OSI Approved :: MIT License",
-	"Programming Language :: Python :: 3.10",
-	"Environment :: Console",
-	"Operating System :: OS Independent",
-	"Intended Audience :: Science/Research",
-	"Topic :: Scientific/Engineering",
-]
-
-keywords = [
-	"",
-]
-
-
-[project.urls]
-# "Homepage" = "https://inject_attr.com"
-"Documentation" = "https://github.com/ryayoung/extend-inplace"
-"Source Code" = "https://github.com/ryayoung/extend-inplace"
+[tool.mypy]
+mypy_path = "src"
+check_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+no_implicit_reexport = true
