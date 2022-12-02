@@ -1,4 +1,4 @@
-<h1> extend-inplace &nbsp;&nbsp;&nbsp; <a href="https://pypi.org/project/extend-inplace/" alt="Version"> <img src="https://img.shields.io/pypi/v/extend-inplace.svg" /></a> </h1>
+<h1> extend-inplace &nbsp;&nbsp;&nbsp; <a href="https://pypi.org/project/extend-inplace/" alt="Version"> <img src="https://img.shields.io/pypi/v/extend-inplace.svg" /></a> &nbsp;&nbsp;&nbsp; <a href="https://github.com/ryayoung/extend-inplace/actions"> <img src="https://github.com/ryayoung/extend-inplace/actions/workflows/tests.yaml/badge.svg"/> </a> </h1>
 
 ```text
 pip install extend-inplace
