@@ -23,19 +23,9 @@ Elements under `@Extend` and `class _(Extend` get 'moved' to `Something` (they b
 
 ---
 
-<br>
+# Why does this exist?
 
-## Why does this exist? Why not extend with a child class?
-
-I built this tool for use in notebook workflows where the majority of code is centered around instances of large, complex classes imported from external libraries, such as pandas/spark `DataFrame`, numpy `ndarray`, or objects of other dataframing libraries, where method chaining is a common practice.
-
-When defining functions in your workflow to manipulate objects of these classes, we usually define them as standalone functions that take an object as an parameter. However, this might be annoying if the rest of our code is using method chaining on the objects.
-
-Creating a child class with extended functionality is always considered best practice. But sometimes this can be inconvenient in a fast-paced or experimental working environment. For instance, you could could subclass pandas `DataFrame`, but `pd.read_csv()` will still return a standard `DataFrame` which you'll need to cast to your new type. And you could subclass pandas `Series`, but selecting columns from `DataFrame` will still return a standard `Series`. This can easily introduce bugs and add unwanted complexity to your code.
-
-## Why not just use `setattr()`?
-
-Here's a simple example. Say for some stupid reason you want `pd.DataFrame` and `pd.Series` to have an `nrows` property with the number of rows.
+Say, for some (dumb) reason, you want `pd.DataFrame` and `pd.Series` to have `nrows` and `ncols` properties.
 
 ```py
 >>> @property
@@ -45,7 +35,7 @@ Here's a simple example. Say for some stupid reason you want `pd.DataFrame` and 
 >>> setattr(pd.DataFrame, 'nrows', nrows)
 >>> setattr(pd.Series, 'nrows', nrows)
 >>> df.nrows # assume we've already defined df = pd.DataFrame()
-3
+0
 ```
 
 #### There are serious problems with this code:
@@ -61,30 +51,37 @@ Instead...
 ... @property
 ... def nrows(self):
 ...     return self.shape[0]
-...
 ```
 
 The above code is concise and easy to read. If we look more closely at what happened...
 
 ```py
->>> pd.DataFrame.nrows
-<property object at 0x1025a3560>
 >>> print(globals()['nrows'])
 None
+>>> pd.DataFrame.nrows
+<property object at 0x1025a3560>
 ```
 
-`nrows` no now `None` in the global scope, and is instead a property of `DataFrame`
+`nrows` is now `None`, and `pd.DataFrame` has an `nrows` property
 
-#
+<br>
+
+# When is this a good idea? Why not create child classes instead?
+
+I built this tool for use in notebook workflows where the majority of code is centered around instances of large, complex classes imported from external libraries, such as pandas/spark `DataFrame`, numpy `ndarray`, or objects of other dataframing libraries, where method chaining is a common practice.
+
+When defining functions in your workflow to manipulate objects of these classes, we usually define them as standalone functions that take an object as an parameter. However, this might be annoying if the rest of our code is using method chaining on the objects.
+
+Creating a child class with extended functionality is always considered best practice. But sometimes this can be inconvenient in a fast-paced or experimental working environment. For instance, you could could subclass pandas `DataFrame`, but `pd.read_csv()` will still return a standard `DataFrame` which you'll need to cast to your new type. And you could subclass pandas `Series`, but selecting columns from `DataFrame` will still return a standard `Series`. This can easily introduce bugs and add unwanted complexity to your code.
+
+<br>
 
 # How to use
 ---
 
-By now you've seen what happens when we decorate a function or property with `Extend`.
+You've seen what happens when we decorate a function with `Extend`.
 
-But we can also set a *group* of attributes without repeated use of `@Extend`.
-
-To do this, nest your attributes in a 'fake' container class.
+But we can also set a *group* of attributes at once. Nest them in a 'fake' container class.
 
 ```py
 >>> @Extend(pd.DataFrame)
@@ -96,6 +93,7 @@ To do this, nest your attributes in a 'fake' container class.
 ...     def say_hello(self):
 ...         return "Hello"
 ...
+>>> df = pd.DataFrame()
 >>> df.nrows
 0
 >>> df.say_hello()
@@ -109,17 +107,16 @@ This can also be expressed more concisely as ...
 ...     ... # attributes go here
 ```
 
-If you thought it couldn't get any more concise, it can! The above can also be written as ...
+Actually, it can get more concise. Try this instead
 
 ```py
 >>> class _(Extend, pd.DataFrame):
 ...     ...
 ```
 
-While more concise, the above code is less intuitive because there is some metaclass magic going on.
+While it may look like it, the above code **IS NOT** multiple inheritance.
 
-While this looks like multiple inheritance, **IT IS NOT.** The metaclass of `Extend` knows that all types
-passed after `Extend` should be treated as targets, not parents.
+The metaclass of `Extend` knows that all types passed after `Extend` should be treated as targets, not parents.
 
 #
 
