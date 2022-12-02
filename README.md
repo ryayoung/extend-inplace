@@ -5,11 +5,13 @@ pip install extend-inplace
 ```
 
 ---
-A simple tool to enable an unconventional but sometimes useful coding style. In simplest terms, it's a framework for setting attributes on classes in an easier, more organized, expressive, and readable way than using `setattr()`. Its purpose will be explained shortly, but first, see the below examples.
 
-The left hand side is the code you write, and the right side shows how it is interpreted.
+A simple tool to enable an unconventional but sometimes useful coding style. In simple terms, it's a framework for modifying existing classes in an easy, organized, and readable way. I'll explain why this exists shortly. First, see the below examples.
 
 <table>
+<tr>
+<td colspan="3">On the left is your code. On the right is how it's interpreted at runtime</td>
+<tr>
 <tr>
 <td><img width="350" alt="example3" src="https://user-images.githubusercontent.com/90723578/205125281-4168cbe4-43d0-45e6-9bc7-9d900f22b611.png"></td>
 <td><img width="350" alt="example1" src="https://user-images.githubusercontent.com/90723578/205125276-aac7b2bc-5474-4278-be51-9f5640957197.png"></td>
@@ -17,7 +19,7 @@ The left hand side is the code you write, and the right side shows how it is int
 </tr>
 </table>
 
-Elements under `@Extend` and `class _(Extend` get 'moved' to `Something`, or in other words, become `None` in the global scope and set as attributes on `Something`.
+Elements under `@Extend` and `class _(Extend` get 'moved' to `Something` (they become `None` in global scope and set as attributes on `Something`).
 
 ---
 
