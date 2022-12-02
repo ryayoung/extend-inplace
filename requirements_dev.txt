@@ -4,3 +4,4 @@ tox
 flake8
 pytest-cov
 mypy
+build
