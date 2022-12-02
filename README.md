@@ -34,7 +34,8 @@ Say, for some (dumb) reason, you want `pd.DataFrame` and `pd.Series` to have `nr
 ...
 >>> setattr(pd.DataFrame, 'nrows', nrows)
 >>> setattr(pd.Series, 'nrows', nrows)
->>> df.nrows # assume we've already defined df = pd.DataFrame()
+>>> df = pd.DataFrame()
+>>> df.nrows
 0
 ```
 
